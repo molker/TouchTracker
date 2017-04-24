@@ -10,6 +10,9 @@ import UIKit
 
 class DrawView: UIView, UIGestureRecognizerDelegate {
     
+    var menuVisible = false
+    var panSpeed: NSMutableArray!
+    var avgSpeed = 0
     var currentLines = [NSValue:Line]()
     var finishedLines = [Line]()
     var selectedLineIndex: Int? {
@@ -70,7 +73,9 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     
     func moveLine(_ gestureRecognizer: UIPanGestureRecognizer) {
         print("Recognzed a pan")
-        
+        let velocity = moveRecognizer.translation(in: self)
+        let speed = sqrt((velocity.x * velocity.x) + (velocity.y * velocity.y))
+        panSpeed.add(speed)
         //If a line is selected...
         if let index = selectedLineIndex {
             if gestureRecognizer.state == .changed {
@@ -97,7 +102,7 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     
     func longPress(_ gestureRecognizer: UIGestureRecognizer) {
         print("Recognized a long press")
-        
+        moveRecognizer.isEnabled = true
         if gestureRecognizer.state == .began {
             let point = gestureRecognizer.location(in: self)
             selectedLineIndex = indexOfLine(at: point)
@@ -141,7 +146,7 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
             //Hide the menu if no line is selected
             menu.setMenuVisible(false, animated: true)
         }
-        
+        menuVisible = menu.isMenuVisible
         setNeedsDisplay()
     }
     
@@ -167,7 +172,7 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     
     func stroke(_ line: Line) {
         let path = UIBezierPath()
-        path.lineWidth = lineThickness
+        path.lineWidth = line.lineWidth
         path.lineCapStyle = .round
         
         path.move(to: line.begin)
@@ -197,6 +202,7 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     }
     
     override func draw(_ rect: CGRect) {
+        
         finishedLineColor.setStroke()
         for line in finishedLines {
             stroke(line)
@@ -217,11 +223,14 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         //Log statement to see the order of events
         print(#function)
-        
+        if menuVisible {
+            moveRecognizer.isEnabled = false
+        }
+        avgSpeed = 0
         for touch in touches {
             let location = touch.location(in: self)
             
-            let newLine = Line(begin: location, end: location)
+            let newLine = Line(lineWidth: lineThickness, begin: location, end: location)
             
             let key = NSValue(nonretainedObject: touch)
             currentLines[key] = newLine
@@ -245,16 +254,25 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         //Log statement to see the order of events
         print(#function)
-        
+        if menuVisible {
+            moveRecognizer.isEnabled = true
+        }
         for touch in touches {
             let key = NSValue(nonretainedObject: touch)
             if var line = currentLines[key] {
                 line.end = touch.location(in: self)
+                line.lineWidth = CGFloat(avgSpeed)
                 
                 finishedLines.append(line)
                 currentLines.removeValue(forKey: key)
             }
         }
+        var i = 0
+        while i < panSpeed.count {
+            avgSpeed += panSpeed[i] as! Int
+            i += 1
+        }
+        avgSpeed /= i
         setNeedsDisplay()
     }
     
