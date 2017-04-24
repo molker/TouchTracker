@@ -10,9 +10,16 @@ import UIKit
 
 class DrawView: UIView, UIGestureRecognizerDelegate {
     
-    var menuVisible = false
-    var panSpeed: NSMutableArray!
-    var avgSpeed = 0
+    var maxVelocity: CGFloat = CGFloat.leastNormalMagnitude
+    var minVelocity: CGFloat = CGFloat.greatestFiniteMagnitude
+    var currentVelocity: CGFloat = 0
+    var currentLineWidth: CGFloat {
+        let maxLineWidth: CGFloat = 20
+        let minLineWidth: CGFloat = 1
+        let lineWidth = (maxVelocity - currentVelocity) / (maxVelocity - minVelocity) * (maxLineWidth - minLineWidth) + minLineWidth
+        return lineWidth
+    }
+    var longPressRecognizer: UILongPressGestureRecognizer!
     var currentLines = [NSValue:Line]()
     var finishedLines = [Line]()
     var selectedLineIndex: Int? {
@@ -57,7 +64,7 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
         tapRecognizer.require(toFail: doubleTapRecognizer)
         addGestureRecognizer(tapRecognizer)
         
-        let longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(DrawView.longPress(_:)))
+        longPressRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(DrawView.longPress(_:)))
         addGestureRecognizer(longPressRecognizer)
         
         moveRecognizer = UIPanGestureRecognizer(target: self, action: #selector(DrawView.moveLine(_:)))
@@ -73,9 +80,16 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     
     func moveLine(_ gestureRecognizer: UIPanGestureRecognizer) {
         print("Recognzed a pan")
-        let velocity = moveRecognizer.translation(in: self)
-        let speed = sqrt((velocity.x * velocity.x) + (velocity.y * velocity.y))
-        panSpeed.add(speed)
+        
+        let velocityXY = gestureRecognizer.velocity(in: self)
+        currentVelocity = hypot(velocityXY.x, velocityXY.y)
+        
+        maxVelocity = max(maxVelocity, currentVelocity)
+        minVelocity = min(minVelocity, currentVelocity)
+        
+        guard longPressRecognizer.state == .changed || longPressRecognizer.state == .ended else {
+            return
+        }
         //If a line is selected...
         if let index = selectedLineIndex {
             if gestureRecognizer.state == .changed {
@@ -102,7 +116,6 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     
     func longPress(_ gestureRecognizer: UIGestureRecognizer) {
         print("Recognized a long press")
-        moveRecognizer.isEnabled = true
         if gestureRecognizer.state == .began {
             let point = gestureRecognizer.location(in: self)
             selectedLineIndex = indexOfLine(at: point)
@@ -146,7 +159,6 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
             //Hide the menu if no line is selected
             menu.setMenuVisible(false, animated: true)
         }
-        menuVisible = menu.isMenuVisible
         setNeedsDisplay()
     }
     
@@ -223,14 +235,10 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         //Log statement to see the order of events
         print(#function)
-        if menuVisible {
-            moveRecognizer.isEnabled = false
-        }
-        avgSpeed = 0
         for touch in touches {
             let location = touch.location(in: self)
             
-            let newLine = Line(lineWidth: lineThickness, begin: location, end: location)
+            let newLine = Line( lineWidth: currentLineWidth, begin: location, end: location)
             
             let key = NSValue(nonretainedObject: touch)
             currentLines[key] = newLine
@@ -254,25 +262,16 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         //Log statement to see the order of events
         print(#function)
-        if menuVisible {
-            moveRecognizer.isEnabled = true
-        }
         for touch in touches {
             let key = NSValue(nonretainedObject: touch)
             if var line = currentLines[key] {
                 line.end = touch.location(in: self)
-                line.lineWidth = CGFloat(avgSpeed)
+                line.lineWidth = currentLineWidth
                 
                 finishedLines.append(line)
                 currentLines.removeValue(forKey: key)
             }
         }
-        var i = 0
-        while i < panSpeed.count {
-            avgSpeed += panSpeed[i] as! Int
-            i += 1
-        }
-        avgSpeed /= i
         setNeedsDisplay()
     }
     

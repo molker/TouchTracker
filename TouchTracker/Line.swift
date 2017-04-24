@@ -10,7 +10,7 @@ import Foundation
 import CoreGraphics
 
 struct Line {
-    var lineWidth: CGFloat!
+    var lineWidth: CGFloat = 10
     var begin = CGPoint.zero
     var end = CGPoint.zero
 }
