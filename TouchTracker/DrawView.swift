@@ -22,6 +22,9 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     var longPressRecognizer: UILongPressGestureRecognizer!
     var currentLines = [NSValue:Line]()
     var finishedLines = [Line]()
+    
+    var currentCircle = Circle()
+    var finishedCircles = [Circle]()
     var selectedLineIndex: Int? {
         didSet {
             if selectedLineIndex == nil {
@@ -217,13 +220,24 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
         
         finishedLineColor.setStroke()
         for line in finishedLines {
+            line.color.setStroke()
             stroke(line)
         }
         
         currentLineColor.setStroke()
         for (_, line) in currentLines {
+            line.color.setStroke()
             stroke(line)
         }
+        
+        // Draw Circles
+        finishedLineColor.setStroke()
+        for circle in finishedCircles {
+            let path = UIBezierPath(ovalIn: circle.rect)
+            path.lineWidth = lineThickness
+            path.stroke()
+        }
+        UIBezierPath(ovalIn: currentCircle.rect).stroke()
         
         if let index = selectedLineIndex {
             UIColor.green.setStroke()
@@ -235,13 +249,20 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         //Log statement to see the order of events
         print(#function)
-        for touch in touches {
+        if touches.count == 2 {
+            let touchesArray = Array(touches)
+            let location1 = touchesArray[0].location(in: self)
+            let location2 = touchesArray[1].location(in: self)
+            currentCircle = Circle(point1: location1, point2: location2)
+        } else {
+            for touch in touches {
             let location = touch.location(in: self)
             
             let newLine = Line( lineWidth: currentLineWidth, begin: location, end: location)
             
             let key = NSValue(nonretainedObject: touch)
             currentLines[key] = newLine
+            }
         }
         
         setNeedsDisplay()
@@ -262,7 +283,15 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         //Log statement to see the order of events
         print(#function)
-        for touch in touches {
+        if touches.count == 2 {
+            let touchesArray = Array(touches)
+            let location1 = touchesArray[0].location(in: self)
+            let location2 = touchesArray[1].location(in: self)
+            currentCircle = Circle(point1: location1, point2: location2)
+            finishedCircles.append(currentCircle)
+            currentCircle = Circle()
+        } else {
+            for touch in touches {
             let key = NSValue(nonretainedObject: touch)
             if var line = currentLines[key] {
                 line.end = touch.location(in: self)
@@ -271,6 +300,7 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
                 finishedLines.append(line)
                 currentLines.removeValue(forKey: key)
             }
+          }
         }
         setNeedsDisplay()
     }
@@ -279,6 +309,7 @@ class DrawView: UIView, UIGestureRecognizerDelegate {
         //Log statement to see the order of events
         
         currentLines.removeAll()
+        currentCircle = Circle()
         
         setNeedsDisplay()
     }
